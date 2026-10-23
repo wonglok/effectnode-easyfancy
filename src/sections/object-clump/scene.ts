@@ -5,20 +5,7 @@
 // map lights the balls instead of an HDR.
 import * as THREE from "three/webgpu";
 import type { PerspectiveCamera, WebGPURenderer } from "three/webgpu";
-import {
-  convertToTexture,
-  metalness,
-  mrt,
-  normalView,
-  output,
-  packNormalToRGB,
-  pass,
-  roughness,
-  sample,
-  unpackRGBToNormal,
-  vec2,
-} from "three/tsl";
-import { ssr } from "three/addons/tsl/display/SSRNode.js";
+import { pass } from "three/tsl";
 import type { SectionWorld } from "../types";
 import { createLiveRainbowEnvMap } from "../shared/live-rainbow-env-map";
 import { samplePointer } from "../shared/section-activity";
@@ -87,10 +74,8 @@ export function createObjectClumpWorld(
   const material = new THREE.MeshPhysicalNodeMaterial({
     color: 0xffffff,
     metalness: 1.0,
-    roughness: 0.3,
-    transparent: true,
+    roughness: 0.5,
     iridescence: 1,
-    opacity: 0.8,
     clearcoat: 1,
   });
   const clump = new THREE.InstancedMesh(geometry, material, COUNT);
@@ -132,48 +117,6 @@ export function createObjectClumpWorld(
   camera.position.set(0, 0, CAMERA_Z);
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
-
-  // Screen-space reflections: each mirror bauble reflects the clump around it
-  // instead of only the environment map. The pass writes view normals and a
-  // packed metal/rough pair into MRT attachments, so the SSR march can skip
-  // everything that is not metal.
-  const scenePass = pass(scene, camera);
-  scenePass.setMRT(
-    mrt({
-      output,
-      normal: packNormalToRGB(normalView),
-      metalrough: vec2(metalness, roughness),
-    }),
-  );
-
-  const sceneColor = scenePass.getTextureNode("output");
-  const sceneDepth = scenePass.getTextureNode("depth");
-  const sceneMetalRough = scenePass.getTextureNode("metalrough");
-  const sceneNormals = scenePass.getTextureNode("normal");
-  const sceneNormal = sample((panelUv) =>
-    unpackRGBToNormal(sceneNormals.sample(panelUv)),
-  );
-
-  const ssrPass = ssr(sceneColor, sceneDepth, sceneNormal, {
-    metalnessNode: sceneMetalRough.r,
-    // The node's blur saturates at roughness 0.25, and these baubles sit at
-    // 0.3 — scaling keeps the trace a crisp mirror instead of a milky veil.
-    roughnessNode: sceneMetalRough.g.mul(0.35),
-  });
-  // Full-resolution tracing: at half resolution the reflection of the curved
-  // baubles stair-steps badly at grazing angles.
-  ssrPass.resolutionScale = 1;
-  ssrPass.quality.value = 0.6;
-  ssrPass.maxDistance.value = 1.5;
-  ssrPass.thickness.value = 0.08;
-  ssrPass.intensity.value = 0.25;
-
-  // SSR returns premultiplied reflection light, so it adds over the beauty.
-  // The intensity stays low — these baubles are already near-white, and a
-  // full-strength reflection clips the iridescence out of the frame.
-  // Baking it into a texture lets the section pipeline sample the result
-  // exactly like a raw pass output, including inside shader transitions.
-  const beautyNode = convertToTexture(sceneColor.add(ssrPass.rgb));
 
   /**
    * One fixed solver step: centre pull + upward gravity, damping, then a few
@@ -245,8 +188,7 @@ export function createObjectClumpWorld(
     index: objectClumpMeta.index,
     scene,
     camera,
-    pass: scenePass,
-    beautyNode,
+    pass: pass(scene, camera),
     resize(aspect) {
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
@@ -291,8 +233,6 @@ export function createObjectClumpWorld(
       geometry.dispose();
       material.dispose();
       environment.dispose();
-      ssrPass.dispose();
-      beautyNode.dispose();
       scene.clear();
     },
   };

@@ -1,9 +1,4 @@
-import type {
-  PerspectiveCamera,
-  PassNode,
-  Scene,
-  TextureNode,
-} from "three/webgpu";
+import type { PerspectiveCamera, PassNode, Scene } from "three/webgpu";
 import type { SectionPhaseState } from "@/lib/scroll-phases";
 
 export type SectionMeta = {
@@ -44,12 +39,6 @@ export type SectionWorld = {
   scene: Scene;
   camera: PerspectiveCamera;
   pass: PassNode;
-  /**
-   * Optional post-processed beauty texture (e.g. SSR baked through an RTT
-   * node). When present the render pipeline composites this instead of the
-   * pass' raw output, for both the plain frame and shader transitions.
-   */
-  beautyNode?: TextureNode;
   animate: (args: SceneAnimateArgs) => void;
   resize: (aspect: number) => void;
   dispose: () => void;
