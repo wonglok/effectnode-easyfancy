@@ -119,9 +119,24 @@ export function SceneDirector() {
     (world: SectionWorld) => {
       worldsRef.current[world.index] = world;
       rebuildPipeline();
-      reportWorldProgress(
-        worldsRef.current.filter(Boolean).length / SCENE_COMPONENTS.length,
-      );
+      const worlds = worldsRef.current;
+      const registered = worlds.filter(Boolean).length;
+      reportWorldProgress(registered / SCENE_COMPONENTS.length);
+
+      // Each scene hardcodes its `index`; if a section is removed without
+      // renumbering the rest, the array gets a hole and the pipeline never
+      // builds — the splash would sit at 27% forever. Say so loudly instead.
+      if (
+        registered === SCENE_COMPONENTS.length &&
+        SCENE_COMPONENTS.some((_component, index) => !worlds[index])
+      ) {
+        console.warn(
+          "[SceneDirector] Scene indices are not contiguous 0..N-1:",
+          worlds.map((entry, index) => (entry ? index : null)),
+          "— renumber the section metas (index + chapter).",
+        );
+      }
+
       schedulePrecompile();
     },
     [rebuildPipeline, schedulePrecompile],
