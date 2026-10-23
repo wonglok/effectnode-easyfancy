@@ -18,4 +18,4 @@ if user provided any glsl code or webgl code or webgl 2.0 code or threeJS WebGLR
 
 # temp files
 
-must write temp files to: .claude/temp
+must write temp files to: `.claude/temp`
