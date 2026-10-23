@@ -118,8 +118,8 @@ export class SectionRenderPipeline {
       const from = this.worlds[index] ?? first;
       const to = this.worlds[index + 1] ?? from;
       this.pipeline.outputNode = this.transitionNode(
-        from.pass.getTextureNode(),
-        to.pass.getTextureNode(),
+        from.beautyNode ?? from.pass.getTextureNode(),
+        to.beautyNode ?? to.pass.getTextureNode(),
         index,
         index + 1,
       );
@@ -141,19 +141,16 @@ export class SectionRenderPipeline {
     toIndex: number,
     isTransitioning: boolean,
   ) {
-    const fromPass =
-      this.worlds[fromIndex]?.pass ?? this.worlds.find((world) => world)?.pass;
-    if (!fromPass) return;
-    const toPass = this.worlds[toIndex]?.pass ?? fromPass;
+    const fromWorld =
+      this.worlds[fromIndex] ?? this.worlds.find((world) => world);
+    if (!fromWorld) return;
+    const toWorld = this.worlds[toIndex] ?? fromWorld;
+    const fromTexture = fromWorld.beautyNode ?? fromWorld.pass.getTextureNode();
+    const toTexture = toWorld.beautyNode ?? toWorld.pass.getTextureNode();
 
     const base = isTransitioning
-      ? this.transitionNode(
-          fromPass.getTextureNode(),
-          toPass.getTextureNode(),
-          fromIndex,
-          toIndex,
-        )
-      : this.finishNode(fromPass.getTextureNode().sample(screenUV));
+      ? this.transitionNode(fromTexture, toTexture, fromIndex, toIndex)
+      : this.finishNode(fromTexture.sample(screenUV));
 
     this.pipeline.outputNode = base;
     this.pipeline.needsUpdate = true;
