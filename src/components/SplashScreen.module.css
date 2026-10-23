@@ -46,11 +46,6 @@
     0 0 18px rgba(216, 255, 99, 0.55);
 }
 
-.thin {
-  font-weight: 300;
-  color: rgba(243, 240, 231, 0.52);
-}
-
 .status {
   display: flex;
   align-items: baseline;

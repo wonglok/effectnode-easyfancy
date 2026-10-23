@@ -72,9 +72,7 @@ export function SplashScreen() {
       <div className={styles.inner}>
         <div className={styles.brand}>
           <span className={styles.mark} />
-          <span>
-            EFFECT<span className={styles.thin}>NODE</span>
-          </span>
+          <span>LOADING...</span>
         </div>
 
         <div className={styles.status}>
