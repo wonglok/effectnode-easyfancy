@@ -2,8 +2,8 @@ import type { CameraConfig, SectionMeta } from "../types";
 
 export const monitorsMeta: SectionMeta = {
   id: "monitors",
-  index: 5,
-  chapter: "06",
+  index: 4,
+  chapter: "05",
   name: "Monitors",
   title: "Old light,\nstill on.",
   accent: "#35c19f",

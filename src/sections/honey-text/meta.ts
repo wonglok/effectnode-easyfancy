@@ -4,8 +4,8 @@ import type { CameraConfig, SectionMeta } from "../types";
 
 export const alpha6Meta: SectionMeta = {
   id: "alpha6",
-  index: 4,
-  chapter: "05",
+  index: 5,
+  chapter: "06",
   name: "Alpha 6",
   title: "Glass,\nnot pixels.",
   accent: "#4aa8ff",

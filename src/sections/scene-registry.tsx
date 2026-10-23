@@ -13,6 +13,6 @@ export const SCENE_COMPONENTS = [
   ObjectClump,
   FlowShield,
   LiveEnv,
-  Alpha6,
   Monitors,
+  Alpha6,
 ];

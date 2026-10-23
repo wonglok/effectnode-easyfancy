@@ -10,7 +10,7 @@ export const SECTIONS = [
   objectClumpMeta,
   flowShieldMeta,
   liveEnvMeta,
-  alpha6Meta,
   monitorsMeta,
+  alpha6Meta,
 ];
 export const SECTION_COUNT = SECTIONS.length;
