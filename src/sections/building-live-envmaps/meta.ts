@@ -4,8 +4,8 @@ import type { CameraConfig, SectionMeta } from "../types";
 
 export const liveEnvMeta: SectionMeta = {
   id: "building-live-envmaps",
-  index: 3,
-  chapter: "04",
+  index: 2,
+  chapter: "03",
   name: "Live Env",
   title: "Built\nin light.",
   accent: "#c7a6ff",

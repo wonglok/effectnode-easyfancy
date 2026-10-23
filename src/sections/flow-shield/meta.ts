@@ -4,8 +4,8 @@ import type { CameraConfig, SectionMeta } from "../types";
 
 export const flowShieldMeta: SectionMeta = {
   id: "flow-shield",
-  index: 2,
-  chapter: "03",
+  index: 1,
+  chapter: "02",
   name: "Flow Shield",
   title: "Force,\nnot field.",
   accent: "#26aeff",
