@@ -2,7 +2,6 @@ import { flowShieldMeta } from "./flow-shield";
 import { liveEnvMeta } from "./building-live-envmaps";
 import { alpha6Meta } from "./honey-text";
 import { kineticMeta } from "./kinetic";
-import { monitorsMeta } from "./monitors";
 import { objectClumpMeta } from "./object-clump";
 
 export const SECTIONS = [
@@ -10,7 +9,6 @@ export const SECTIONS = [
   objectClumpMeta,
   flowShieldMeta,
   liveEnvMeta,
-  monitorsMeta,
   alpha6Meta,
 ];
 export const SECTION_COUNT = SECTIONS.length;

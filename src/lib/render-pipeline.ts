@@ -160,10 +160,10 @@ export class SectionRenderPipeline {
   }
 
   /**
-   * Picks the handoff shader for a pair of chapters: the page curl for 3 ↔ 4,
-   * the cross zoom for the current last pair (4 ↔ 5), plus the honeycomb grid,
-   * column melt and directional scale shaders kept for later chapters if they
-   * return, and the liquid-glass wipe elsewhere.
+   * Picks the handoff shader for a pair of chapters: the cross zoom for the
+   * current last pair (3 ↔ 4), plus the page curl, honeycomb grid, column melt
+   * and directional scale shaders kept for later chapters if they return, and
+   * the liquid-glass wipe elsewhere.
    */
   private transitionNode(
     fromTexture: ReturnType<SectionWorld["pass"]["getTextureNode"]>,
@@ -172,14 +172,12 @@ export class SectionRenderPipeline {
     toIndex: number,
   ) {
     const isPageCurlPair =
-      (fromIndex === 3 && toIndex === 4) ||
-      (fromIndex === 4 && toIndex === 3) ||
       (fromIndex === 6 && toIndex === 7) ||
       (fromIndex === 7 && toIndex === 6);
     const isCrossZoomPair =
-      (fromIndex === 4 && toIndex === 5) || (fromIndex === 5 && toIndex === 4);
+      (fromIndex === 3 && toIndex === 4) || (fromIndex === 4 && toIndex === 3);
     const isDirectionalScalePair =
-      (fromIndex === 5 && toIndex === 6) || (fromIndex === 6 && toIndex === 5);
+      (fromIndex === 4 && toIndex === 5) || (fromIndex === 5 && toIndex === 4);
 
     if (isPageCurlPair) {
       return this.pageCurlTransitionNode(fromTexture, toTexture);
