@@ -15,3 +15,7 @@ if user provided any glsl code or webgl code or webgl 2.0 code or threeJS WebGLR
 1. install dependencis using "bun" if possible, if not then use what's avaibale.
 2. start nextjs server and start the skill easy-fancy's vite server
 3. open easy fancy webpage
+
+# temp files
+
+must write temp files to: .claude/temp
