@@ -19,8 +19,8 @@ import type { SectionPhaseState } from "@/lib/scroll-phases";
 
 export const vrGalleryMeta: SectionMeta = {
   id: "vr-gallery",
-  index: 3,
-  chapter: "04",
+  index: 6,
+  chapter: "07",
   name: "VR Gallery",
   title: "Step\ninside.",
   accent: "#ffb46b",

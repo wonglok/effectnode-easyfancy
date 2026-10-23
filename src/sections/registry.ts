@@ -1,14 +1,14 @@
-import { aetherMeta } from "./01-aether";
-import { kineticMeta } from "./02-kinetic";
-import { matterMeta } from "./03-matter";
-import { vrGalleryMeta } from "./04-vr-gallery";
-import { signalMeta } from "./05-signal";
+import { flowShieldMeta } from "./flow-shield";
+import { liveEnvMeta } from "./building-live-envmaps";
+import { alpha6Meta } from "./honey-text";
+import { kineticMeta } from "./kinetic";
+import { rainbowSphereMeta } from "./rainbow-sphere";
 
 export const SECTIONS = [
-  aetherMeta,
   kineticMeta,
-  matterMeta,
-  vrGalleryMeta,
-  signalMeta,
+  rainbowSphereMeta,
+  flowShieldMeta,
+  liveEnvMeta,
+  alpha6Meta,
 ];
 export const SECTION_COUNT = SECTIONS.length;

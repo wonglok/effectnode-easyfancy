@@ -20,8 +20,8 @@ import type { SectionPhaseState } from "@/lib/scroll-phases";
 
 export const signalMeta: SectionMeta = {
   id: "signal",
-  index: 4,
-  chapter: "05",
+  index: 7,
+  chapter: "08",
   name: "Signal",
   title: "One scroll,\nfive worlds.",
   // A meadow at night rather than the chapter's old violet signal field.

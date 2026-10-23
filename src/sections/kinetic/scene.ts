@@ -31,12 +31,13 @@ import { samplePointer } from "../shared/section-activity";
 import type { SectionPhaseState } from "@/lib/scroll-phases";
 // import Lovelo from "./lovelo";
 import { createTouchSky } from "./touch-sky";
+import { createScrollCue } from "../shared/scroll-cue";
 import { Helvetica } from "../shared/helvetica";
 
 export const kineticMeta: SectionMeta = {
   id: "kinetic",
-  index: 1,
-  chapter: "02",
+  index: 0,
+  chapter: "01",
   name: "Kinetic",
   title: "Motion,\nnot video.",
   accent: "#c5e6ff",
@@ -97,6 +98,15 @@ const DUDV_URL = "/texture/dudv.jpg";
 /** Centre text, as in the original scene. */
 const CENTER_TEXT = "Welcome";
 const font = new Font(Helvetica as unknown as FontData);
+
+/**
+ * The cue is full strength on arrival and fades across the first fraction of
+ * the chapter's hold, once the visitor has taken the hint.
+ */
+function scrollCueAmount(phase: SectionPhaseState) {
+  if (phase.phase !== "animate") return 0;
+  return 1 - THREE.MathUtils.smoothstep(phase.progress, 0, 0.16);
+}
 
 /** Visible world height at the camera's home depth. */
 function viewHeightAtHome() {
@@ -236,59 +246,10 @@ function createCenterText(camera: PerspectiveCamera, sky: THREE.CubeTexture) {
   return { mount, fitToView };
 }
 
-type Bubble = {
-  mount: THREE.Group;
-  spinner: THREE.Group;
-  shell: THREE.Mesh;
-  radius: number;
-  baseY: number;
-  phase: number;
-};
-
-/**
- * Four iridescent soap bubbles in the reference scene's diagonal composition.
- * They share one sphere geometry and one thin-film physical material; only the
- * mount, radius and breathing phase differ per instance.
- */
-function createBubbles(material: THREE.Material, height: number): Bubble[] {
-  const layout = [
-    { x: 0, y: -0.4, z: 0, roll: 0 },
-    { x: 0.3, y: -0.1, z: -0.4, roll: -0.03 },
-    { x: -0.4, y: -0.15, z: -0.55, roll: 0.03 },
-    { x: 0, y: 0.15, z: -0.55, roll: 0.03 },
-  ];
-  const geometry = new THREE.SphereGeometry(1, 64, 48);
-
-  return layout.map((entry, index) => {
-    const mount = new THREE.Group();
-    mount.position.set(entry.x * height, entry.y * height, entry.z * height);
-    mount.rotation.z = entry.roll * Math.PI;
-
-    const spinner = new THREE.Group();
-    mount.add(spinner);
-
-    const radius = height * (0.145 + (index % 2) * 0.016);
-    const shell = new THREE.Mesh(geometry, material);
-    shell.scale.setScalar(radius);
-    // The breathing scale and the shell's translucency ignore static bounds.
-    shell.frustumCulled = false;
-    spinner.add(shell);
-
-    return {
-      mount,
-      spinner,
-      shell,
-      radius,
-      baseY: mount.position.y,
-      phase: index * 1.7,
-    };
-  });
-}
-
 /**
  * Rebuilds chapter 02 from the original Jelly Fish Studio scene, ported to the
- * WebGPU/TSL renderer: the touch-trail cube map feeds a refracted water plate,
- * four iridescent bubbles and the extruded Lovelo sign.
+ * WebGPU/TSL renderer: the touch-trail cube map feeds a refracted water plate
+ * and the extruded Lovelo sign.
  */
 function buildKineticWorld(
   camera: PerspectiveCamera,
@@ -306,48 +267,9 @@ function buildKineticWorld(
   const text = createCenterText(camera, sky.texture);
   scene.add(text.mount);
 
-  const bubbleRotation = new THREE.Group();
-  bubbleRotation.rotation.z = Math.PI * 0.15;
-  scene.add(bubbleRotation);
-
-  // Soap-bubble film: a physical node material with thin-film iridescence,
-  // lit by the live touch-sky cube map so the rainbow shifts as the view moves.
-  const bubbleMaterial = new THREE.MeshPhysicalNodeMaterial({
-    color: "#ffffff",
-    transparent: true,
-    opacity: 0.28,
-    side: THREE.DoubleSide,
-    metalness: 0,
-    roughness: 0.02,
-    ior: 1.33,
-    clearcoat: 1,
-    clearcoatRoughness: 0.03,
-    iridescence: 1,
-    iridescenceIOR: 1.45,
-    iridescenceThicknessRange: [100, 1400],
-    depthWrite: false,
-  });
-  bubbleMaterial.envNode = cubeTexture(
-    sky.texture,
-    reflectVector,
-  ).rgb.mul(1.9);
-
-  // Fresnel edge: the film is invisible face-on, so the silhouette carries a
-  // hue sweep. The physical thin-film layer produces the same rainbow from the
-  // reflected sky; this adds it to the emissive term so it reads on a dark set.
-  const viewDirection = cameraPosition.sub(positionWorld).normalize();
-  const facing = clamp(dot(normalWorld.normalize(), viewDirection), 0, 1);
-  const rim = pow(float(1).sub(facing), 2.2);
-  const hue = rim.mul(7.0);
-  const rainbow = vec3(
-    hue.cos().mul(0.5).add(0.5),
-    hue.add(2.094).cos().mul(0.5).add(0.5),
-    hue.add(4.188).cos().mul(0.5).add(0.5),
-  );
-  bubbleMaterial.emissiveNode = rainbow.mul(rim.mul(0.3));
-
-  const bubbles = createBubbles(bubbleMaterial, height);
-  for (const bubble of bubbles) bubbleRotation.add(bubble.mount);
+  // Opening chapter cue, floating at the bottom of the viewport.
+  const scrollCue = createScrollCue(meta.accent);
+  scene.add(scrollCue.object);
 
   return {
     id: meta.id,
@@ -370,44 +292,16 @@ function buildKineticWorld(
           : phase.phase === "exit"
             ? 1
             : 0;
-      // The animate phase carries the bubbles half a rotation up the chapter;
-      // enter holds 0° and exit keeps the half turn.
-      const turn =
-        phase.phase === "animate"
-          ? phase.progress * Math.PI
-          : phase.phase === "exit"
-            ? Math.PI
-            : 0;
-
-      for (const bubble of bubbles) {
-        // Breathe: a slow inhale swells the film and lifts the bubble.
-        const breathe = Math.sin(elapsed * 0.85 + bubble.phase);
-        const swell = 1 + breathe * 0.035;
-        bubble.shell.scale.set(
-          bubble.radius * swell,
-          bubble.radius * (1 - breathe * 0.022),
-          bubble.radius * swell,
-        );
-        bubble.mount.position.y =
-          bubble.baseY +
-          smooth * height * 0.5 * 2 +
-          Math.sin(elapsed * 0.4 + bubble.phase) * 0.45;
-        bubble.spinner.position.x =
-          Math.sin(elapsed * 0.28 + bubble.phase) * 0.4;
-        bubble.spinner.rotation.y =
-          turn * 0.15 + Math.sin(elapsed * 0.2 + bubble.phase) * 0.2;
-        bubble.spinner.rotation.z =
-          Math.sin(elapsed * 0.33 + bubble.phase) * 0.05;
-      }
-
       // The sign sinks below the frame and tilts flat as the chapter scrolls.
       text.mount.position.y = smooth * height * -0.3;
       text.mount.rotation.x = smooth * Math.PI * -0.5;
       text.mount.scale.setScalar(1 + smooth * 0.5);
 
+      scrollCue.update(camera, elapsed, scrollCueAmount(phase));
       sky.update();
     },
     dispose() {
+      scrollCue.dispose();
       sky.dispose();
       dudv?.dispose();
       disposeScene(scene);
@@ -425,7 +319,7 @@ export async function createKineticWorld(
   return buildKineticWorld(camera, dudv);
 }
 
-/** Renders the same bubbles without the flow map if it fails. */
+/** Renders the same field without the flow map if it fails. */
 export function createKineticFallbackWorld(
   camera: PerspectiveCamera,
 ): SectionWorld {

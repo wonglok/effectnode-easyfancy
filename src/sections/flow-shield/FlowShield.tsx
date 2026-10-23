@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import type { WebGPURenderer } from "three/webgpu";
 import type { Section3DProps, SectionWorld } from "../types";
 import {
   getSceneTime,
@@ -9,22 +10,18 @@ import {
   getSectionPhase,
 } from "../shared/section-activity";
 import { makeCamera } from "../shared/scene-utils";
-import {
-  createMatterFallbackWorld,
-  createMatterWorld,
-  matterCamera,
-} from "./scene";
+import { flowShieldCamera } from "./meta";
 
-/** 3D scene component for chapter 03. */
-export function Matter3D({ onReady, onDispose }: Section3DProps) {
+/** 3D component for chapter 01, the ported pmndrs flow-shield scene. */
+export function FlowShield({ onReady, onDispose }: Section3DProps) {
   const size = useThree((state) => state.size);
+  const gl = useThree((state) => state.gl);
+  const renderer = gl as unknown as WebGPURenderer;
   const camera = useMemo(
-    () => makeCamera(matterCamera.base, matterCamera.fov),
+    () => makeCamera(flowShieldCamera.base, flowShieldCamera.fov),
     [],
   );
   const worldRef = useRef<SectionWorld | null>(null);
-  // The async world may finish loading after the size effect has run, so keep
-  // the latest canvas size in a ref and apply it when the world mounts.
   const sizeRef = useRef(size);
   useEffect(() => {
     sizeRef.current = size;
@@ -32,7 +29,6 @@ export function Matter3D({ onReady, onDispose }: Section3DProps) {
 
   useEffect(() => {
     let cancelled = false;
-    let world: SectionWorld | null = null;
 
     const mount = (next: SectionWorld) => {
       if (cancelled) {
@@ -41,20 +37,21 @@ export function Matter3D({ onReady, onDispose }: Section3DProps) {
       }
       const { width, height } = sizeRef.current;
       if (height > 0) next.resize(width / height);
-      world = next;
       worldRef.current = next;
       onReady(next);
     };
 
     const load = async () => {
       try {
-        mount(await createMatterWorld(camera));
+        const { createFlowShieldWorld } = await import("./scene");
+        mount(createFlowShieldWorld(camera, renderer));
       } catch (error) {
         console.warn(
-          "Matter island failed to load; using the fallback scene.",
+          "Flow Shield scene failed to load; using the fallback scene.",
           error,
         );
-        if (!cancelled) mount(createMatterFallbackWorld(camera));
+        const { createFlowShieldFallbackWorld } = await import("./scene");
+        mount(createFlowShieldFallbackWorld(camera));
       }
     };
 
@@ -62,12 +59,13 @@ export function Matter3D({ onReady, onDispose }: Section3DProps) {
 
     return () => {
       cancelled = true;
+      const world = worldRef.current;
       if (!world) return;
-      if (worldRef.current === world) worldRef.current = null;
+      worldRef.current = null;
       onDispose(world);
       world.dispose();
     };
-  }, [camera, onReady, onDispose]);
+  }, [camera, renderer, onReady, onDispose]);
 
   useEffect(() => {
     if (size.height === 0) return;

@@ -1,16 +1,16 @@
 "use client";
 
-import { Aether3D } from "./01-aether";
-import { Kinetic3D } from "./02-kinetic";
-import { Matter3D } from "./03-matter";
-import { VrGallery3D } from "./04-vr-gallery";
-import { Signal3D } from "./05-signal";
+import { FlowShield } from "./flow-shield";
+import { LiveEnv } from "./building-live-envmaps";
+import { Alpha6 } from "./honey-text";
+import { Kinetic3D } from "./kinetic";
+import { RainbowSphere } from "./rainbow-sphere";
 
 /** 3D components, each owning one scene, camera rig and render target. */
 export const SCENE_COMPONENTS = [
-  Aether3D,
   Kinetic3D,
-  Matter3D,
-  VrGallery3D,
-  Signal3D,
+  RainbowSphere,
+  FlowShield,
+  LiveEnv,
+  Alpha6,
 ];

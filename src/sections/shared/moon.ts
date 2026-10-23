@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Chapter 01 moon
+// Sky moon
 // ---------------------------------------------------------------------------
 // A self-lit moon disc pinned to the upper-right of the camera's view. It is
 // drawn as a sprite rather than a sphere because the moon is effectively at
@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import * as THREE from "three/webgpu";
-import { mulberry32 } from "../shared/scene-utils";
+import { mulberry32 } from "./scene-utils";
 
 /** Far enough out that villa/water geometry cannot occlude it. */
 const MOON_DISTANCE = 160;
@@ -25,7 +25,7 @@ const HALO_SCALE = 2.9;
 const TEXTURE_SIZE = 512;
 const HALO_TEXTURE_SIZE = 256;
 
-export type AetherMoon = {
+export type SkyMoon = {
   object: THREE.Group;
   update(camera: THREE.PerspectiveCamera, aspect: number): void;
   dispose(): void;
@@ -222,7 +222,7 @@ function createHaloTexture() {
  * Builds the moon group and returns an updater that keeps it at the same
  * screen-space position and size for any camera aspect ratio.
  */
-export function createAetherMoon(): AetherMoon {
+export function createSkyMoon(): SkyMoon {
   const object = new THREE.Group();
 
   const haloTexture = createHaloTexture();

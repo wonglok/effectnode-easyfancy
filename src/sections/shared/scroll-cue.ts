@@ -41,15 +41,15 @@ const font = new Font(Helvetica as unknown as FontData);
 /** Distance in front of the camera the cue floats at. */
 const CUE_DISTANCE = 2.6;
 /** Text spans this share of the visible width, capped so it stays delicate. */
-const CUE_WIDTH_RATIO = 0.288;
-const CUE_MAX_WIDTH = 0.96;
+const CUE_WIDTH_RATIO = 0.08;
+const CUE_MAX_WIDTH = 0.28;
 /** Bottom offset from the view centre, as a share of the visible height. */
 const CUE_BOTTOM_OFFSET = 0.34;
 /** One downward pass of a chevron, in seconds. */
 const CHEVRON_CYCLE = 1.7;
 /** How far a chevron travels before it restarts. */
-const CHEVRON_TRAVEL = 0.1;
-const CHEVRON_BASE_Y = [-0.12, -0.192, -0.264];
+const CHEVRON_TRAVEL = 0.03;
+const CHEVRON_BASE_Y = [-0.034, -0.055, -0.076];
 const PAPER = "#f3f0e7";
 
 export type ScrollCue = {
@@ -62,9 +62,9 @@ export type ScrollCue = {
 
 /** A flat V-shaped band, used three times for the descending motion. */
 function makeChevronGeometry() {
-  const width = 0.136;
-  const drop = 0.06;
-  const thickness = 0.0192;
+  const width = 0.0392;
+  const drop = 0.0172;
+  const thickness = 0.00552;
 
   const shape = new THREE.Shape();
   shape.moveTo(-width / 2, 0);

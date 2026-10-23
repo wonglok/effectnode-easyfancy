@@ -134,7 +134,7 @@ export default function Timeline() {
   const selectTransition = (index: number): void => {
     // Boundary `index` sits between scenes `index` and `index + 1` (1-based),
     // so the shader handoff starts from the zero-based chapter `index - 1`.
-    prefill(`for the transition ${index}, please: ...`);
+    prefill(`for the transition ${index}, please: `);
     playTransitionInPreview(index - 1);
   };
 

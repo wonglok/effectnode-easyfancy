@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three/webgpu";
 import { WaterMesh } from "three/addons/objects/Water2Mesh.js";
-import { mulberry32 } from "../shared/scene-utils";
+import { mulberry32 } from "./scene-utils";
 
 export type WaterMesh3DOptions = {
   /**
@@ -131,8 +131,8 @@ function getWaterNormalMaps(): [THREE.DataTexture, THREE.DataTexture] {
 
 /**
  * Builds a WebGPU water surface (reflections, refraction and two scrolling
- * normal layers). The mesh is returned for imperative scenes such as the
- * Aether world, where adding to a `<Canvas>` is not enough.
+ * normal layers). The mesh is returned for imperative section worlds, where
+ * adding to a `<Canvas>` is not enough.
  */
 export function createWaterMesh(options: WaterMesh3DOptions = {}): WaterMesh {
   const {
