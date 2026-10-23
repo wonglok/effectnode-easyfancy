@@ -4,6 +4,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { SECTION_COUNT, SECTIONS } from "@/sections/registry";
 import {
   SCROLL_ROOT_ID,
+  restoreScrollFromHash,
   trackPageScroll,
   useScrollerStore,
 } from "@/store/useScrollerStore";
@@ -137,7 +138,7 @@ function SceneHud() {
             aria-label={`Go to scene ${section.index + 1}, ${section.name}`}
             aria-current={active ? "true" : undefined}
           >
-            {section.index + 1}
+            {`${(section.index + 1 + "").padStart(2, "0")}`}
           </button>
         );
       })}
@@ -148,14 +149,28 @@ function SceneHud() {
 export function Landing() {
   useEffect(() => trackPageScroll(), []);
 
+  // Once every scene is loaded, restore the chapter named by the URL hash
+  // (e.g. `/#scene-03`) and keep the hash in step with the active chapter.
+  useEffect(() => {
+    const restore = () => {
+      if (useScrollerStore.getState().bootPhase !== "ready") return;
+      restoreScrollFromHash();
+    };
+    restore();
+    return useScrollerStore.subscribe(restore);
+  }, []);
+
   // easy-fancy embeds this page and posts a message when one of its timeline
   // clips is clicked. Scenes scrub through goTo; transitions play the whole
   // handoff so the shader's begin and end are both visible.
   useEffect(() => {
     const navigate = (event: MessageEvent) => {
-      const data = event.data as
-        | { source?: unknown; type?: unknown; index?: unknown; from?: unknown }
-        | null;
+      const data = event.data as {
+        source?: unknown;
+        type?: unknown;
+        index?: unknown;
+        from?: unknown;
+      } | null;
       if (!data || data.source !== "easy-fancy") return;
 
       if (data.type === "scroll-to-scene") {
@@ -169,11 +184,7 @@ export function Landing() {
 
       if (data.type === "play-transition") {
         const from = Number(data.from);
-        if (
-          !Number.isInteger(from) ||
-          from < 0 ||
-          from >= SECTION_COUNT - 1
-        ) {
+        if (!Number.isInteger(from) || from < 0 || from >= SECTION_COUNT - 1) {
           return;
         }
         useScrollerStore.getState().previewTransition(from);

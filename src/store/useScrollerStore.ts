@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { SECTION_COUNT } from "@/sections/registry";
+import { SECTION_COUNT, SECTIONS } from "@/sections/registry";
 import { audioEngine } from "@/lib/audio-engine";
 import {
   CHAPTER_SPAN,
@@ -70,6 +70,58 @@ const clampProgress = (value: number) =>
   Math.min(maxScrollProgress(), Math.max(0, value));
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+/** Section hashes are the chapter numbers, e.g. `#scene-01`. */
+const hashForIndex = (index: number) => {
+  const section = SECTIONS[index];
+  return section ? `#scene-${section.chapter}` : "";
+};
+
+/** Resolves a `#scene-NN` hash to a section index, or -1. */
+function indexForHash(hash: string) {
+  const match = /^#scene-(\d+)$/.exec(hash);
+  if (!match) return -1;
+  return SECTIONS.findIndex((section) => section.chapter === match[1]);
+}
+
+/**
+ * Hash syncing waits for the boot restore. Otherwise the first scroll publish
+ * would write `#scene-01` before the hash the visitor arrived with is read.
+ */
+let hashSyncEnabled = false;
+
+/** Mirrors the active chapter into the URL without adding history entries. */
+function syncHash(index: number) {
+  if (!hashSyncEnabled || typeof window === "undefined") return;
+  const next = hashForIndex(index);
+  if (!next || window.location.hash === next) return;
+  window.history.replaceState(window.history.state, "", next);
+}
+
+/**
+ * Called once the splash has finished loading every scene: restores the
+ * chapter named by the URL hash, then keeps the hash in step from then on.
+ */
+export function restoreScrollFromHash() {
+  if (typeof window === "undefined" || hashSyncEnabled) return;
+  hashSyncEnabled = true;
+
+  const index = indexForHash(window.location.hash);
+  if (index < 0) {
+    syncHash(useScrollerStore.getState().activeIndex);
+    return;
+  }
+
+  if (engine.pixelsPerSection <= 1) {
+    engine.pixelsPerSection = measureSectionPixels();
+  }
+  const progress = getChapterAnchor(index);
+  engine.scrollPixel = clampScrollPixel(progress * engine.pixelsPerSection);
+  engine.scrollTargetPixel = engine.scrollPixel;
+  engine.scrollVelocity = 0;
+  engine.scrollMotion = "idle";
+  publishScroll();
+}
 
 /**
  * Preload splits between network assets (the scene GLB/HDR files) and
@@ -372,6 +424,7 @@ function createScrollerStore() {
           transitionProgress: 0,
           isTransitioning: false,
         });
+        syncHash(activeIndex);
         return;
       }
 
@@ -383,6 +436,7 @@ function createScrollerStore() {
         transitionProgress: blend,
         isTransitioning: true,
       });
+      syncHash(activeIndex);
     },
 
     setGpuStatus: (gpuStatus) => set({ gpuStatus }),
@@ -553,10 +607,20 @@ export function trackPageScroll() {
     engine.scrollMotion = "idle";
   };
 
+  // Manual hash edits and anchor links navigate to the matching chapter.
+  // Our own hash sync uses replaceState, which does not fire this event.
+  const onHashChange = () => {
+    const index = indexForHash(window.location.hash);
+    if (index < 0) return;
+    if (index === useScrollerStore.getState().activeIndex) return;
+    scrollVirtualTo(getChapterAnchor(index));
+  };
+
   startScrollLoop();
 
   root.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("resize", onResize, { passive: true });
+  window.addEventListener("hashchange", onHashChange);
   root.addEventListener("touchstart", onTouchStart, { passive: true });
   root.addEventListener("touchmove", onTouchMove, { passive: false });
   root.addEventListener("touchend", onTouchEnd, { passive: true });
@@ -568,6 +632,7 @@ export function trackPageScroll() {
     if (engine.scrollRoot === root) engine.scrollRoot = null;
     root.removeEventListener("wheel", onWheel);
     window.removeEventListener("resize", onResize);
+    window.removeEventListener("hashchange", onHashChange);
     root.removeEventListener("touchstart", onTouchStart);
     root.removeEventListener("touchmove", onTouchMove);
     root.removeEventListener("touchend", onTouchEnd);

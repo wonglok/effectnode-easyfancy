@@ -10,15 +10,15 @@ import {
   getSectionPhase,
 } from "../shared/section-activity";
 import { makeCamera } from "../shared/scene-utils";
-import { rainbowSphereCamera } from "./meta";
+import { objectClumpCamera } from "./meta";
 
-/** 3D component for chapter 02, the mirror sphere in a live rainbow. */
-export function RainbowSphere({ onReady, onDispose }: Section3DProps) {
+/** 3D component for chapter 02, the mirror-ball clump in a live rainbow. */
+export function ObjectClump({ onReady, onDispose }: Section3DProps) {
   const size = useThree((state) => state.size);
   const gl = useThree((state) => state.gl);
   const renderer = gl as unknown as WebGPURenderer;
   const camera = useMemo(
-    () => makeCamera(rainbowSphereCamera.base, rainbowSphereCamera.fov),
+    () => makeCamera(objectClumpCamera.base, objectClumpCamera.fov),
     [],
   );
   const worldRef = useRef<SectionWorld | null>(null);
@@ -43,15 +43,15 @@ export function RainbowSphere({ onReady, onDispose }: Section3DProps) {
 
     const load = async () => {
       try {
-        const { createRainbowSphereWorld } = await import("./scene");
-        mount(createRainbowSphereWorld(camera, renderer));
+        const { createObjectClumpWorld } = await import("./scene");
+        mount(createObjectClumpWorld(camera, renderer));
       } catch (error) {
         console.warn(
-          "Rainbow sphere failed to load; using the fallback scene.",
+          "Object clump failed to load; using the fallback scene.",
           error,
         );
-        const { createRainbowSphereFallbackWorld } = await import("./scene");
-        mount(createRainbowSphereFallbackWorld(camera));
+        const { createObjectClumpFallbackWorld } = await import("./scene");
+        mount(createObjectClumpFallbackWorld(camera));
       }
     };
 
