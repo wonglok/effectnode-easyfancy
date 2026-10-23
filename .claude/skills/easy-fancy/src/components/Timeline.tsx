@@ -128,13 +128,17 @@ export default function Timeline() {
     // The preview is cross-origin; it listens for this and scrubs its own
     // virtual scroller to the chapter.
     scrollPreviewToScene(scenes[index]?.index ?? index);
-    prefill(`for the scene ${index + 1}, please: `);
+    prefill(
+      `for the scene ${index + 1}, please learn and apply from the following sources of code or instruction:\n`,
+    );
   };
 
   const selectTransition = (index: number): void => {
     // Boundary `index` sits between scenes `index` and `index + 1` (1-based),
     // so the shader handoff starts from the zero-based chapter `index - 1`.
-    prefill(`for the transition ${index}, please: `);
+    prefill(
+      `for the transition ${index}, please learn and apply from the following sources of code or instruction:\n`,
+    );
     playTransitionInPreview(index - 1);
   };
 
