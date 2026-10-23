@@ -174,6 +174,9 @@ type ScrollEngine = {
   previewStartPixel: number;
   previewEndPixel: number;
   previewStartTime: number;
+  /** Spring tuning, mirrored onto the singleton so Fast Refresh applies it. */
+  scrollStiffness: number;
+  scrollDamping: number;
 };
 
 const createScrollEngine = (): ScrollEngine => ({
@@ -188,6 +191,8 @@ const createScrollEngine = (): ScrollEngine => ({
   previewStartPixel: 0,
   previewEndPixel: 0,
   previewStartTime: 0,
+  scrollStiffness: 30,
+  scrollDamping: 11,
 });
 
 /**
@@ -199,12 +204,22 @@ const createScrollEngine = (): ScrollEngine => ({
 const engine: ScrollEngine =
   typeof window === "undefined"
     ? createScrollEngine()
-    : ((window as unknown as { __scrollerEngine?: ScrollEngine })
-        .__scrollerEngine ??= createScrollEngine());
+    : ((
+        window as unknown as { __scrollerEngine?: ScrollEngine }
+      ).__scrollerEngine ??= createScrollEngine());
 
-/** Critically damped spring used when a chapter is targeted: ~0.4s settle. */
-const SCROLL_STIFFNESS = 120;
-const SCROLL_DAMPING = 22;
+/**
+ * Critically damped spring used when a chapter is targeted. Halving the
+ * natural frequency (sqrt(stiffness)) doubles the settle time, so navigation
+ * glides at half the original speed: ~0.8s settle.
+ */
+const SCROLL_STIFFNESS = 30;
+const SCROLL_DAMPING = 11;
+
+// Mirror the tuning onto the browser-global engine on every module evaluation,
+// so Fast Refresh applies new spring values without needing a full reload.
+engine.scrollStiffness = SCROLL_STIFFNESS;
+engine.scrollDamping = SCROLL_DAMPING;
 /** Exponential friction (1/s) that bleeds off flick momentum. */
 const SCROLL_FRICTION = 4;
 /** Wheel pixels → impulse in px/s; one tick glides about as far as before. */
@@ -229,10 +244,7 @@ function measureSectionPixels() {
 }
 
 const clampScrollPixel = (value: number) =>
-  Math.min(
-    maxScrollProgress() * engine.pixelsPerSection,
-    Math.max(0, value),
-  );
+  Math.min(maxScrollProgress() * engine.pixelsPerSection, Math.max(0, value));
 
 /** Keeps flick momentum inside the speed cap. */
 const clampVelocity = (value: number) =>
@@ -246,7 +258,9 @@ function publishScroll() {
 
 /** Adds velocity * delta to the scroll pixel, stopping at the chapter bounds. */
 function integrateVelocity(dt: number) {
-  const next = clampScrollPixel(engine.scrollPixel + engine.scrollVelocity * dt);
+  const next = clampScrollPixel(
+    engine.scrollPixel + engine.scrollVelocity * dt,
+  );
   // Hitting a bound kills the momentum instead of grinding against it.
   if (next === engine.scrollPixel) engine.scrollVelocity = 0;
   engine.scrollPixel = next;
@@ -310,8 +324,8 @@ function scrollLoop(now: number) {
 
   const displacement = engine.scrollTargetPixel - engine.scrollPixel;
   engine.scrollVelocity +=
-    (displacement * SCROLL_STIFFNESS -
-      engine.scrollVelocity * SCROLL_DAMPING) *
+    (displacement * engine.scrollStiffness -
+      engine.scrollVelocity * engine.scrollDamping) *
     dt;
   integrateVelocity(dt);
 
@@ -476,8 +490,9 @@ type ScrollerStore = ReturnType<typeof createScrollerStore>;
 export const useScrollerStore: ScrollerStore =
   typeof window === "undefined"
     ? createScrollerStore()
-    : ((window as unknown as { __scrollerStore?: ScrollerStore })
-        .__scrollerStore ??= createScrollerStore());
+    : ((
+        window as unknown as { __scrollerStore?: ScrollerStore }
+      ).__scrollerStore ??= createScrollerStore());
 
 /** Wheel pixels per viewport height; smaller means faster chapter travel. */
 const WHEEL_GAIN = 0.35;

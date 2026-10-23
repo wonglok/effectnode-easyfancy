@@ -39,7 +39,6 @@ function ScrollLine() {
 
 function Header() {
   const activeIndex = useScrollerStore((state) => state.activeIndex);
-  const gpuStatus = useScrollerStore((state) => state.gpuStatus);
   const music = useScrollerStore((state) => state.music);
   const setMusic = useScrollerStore((state) => state.setMusic);
   const goTo = useScrollerStore((state) => state.goTo);
@@ -50,12 +49,10 @@ function Header() {
       <button
         className={styles.brand}
         onClick={() => goTo(0)}
-        aria-label="EffectNode — back to the beginning"
+        aria-label="Your Company — back to the beginning"
       >
         <span className={styles.brandMark} />
-        <span>
-          EFFECT<span className={styles.brandThin}>NODE</span>
-        </span>
+        <span>Your Company</span>
       </button>
 
       <div className={styles.headerRight}>
@@ -89,15 +86,6 @@ function Header() {
           </svg>
         </button>
 
-        <span className={styles.gpuPill} data-live={gpuStatus === "ready"}>
-          <i />
-          {gpuStatus === "ready"
-            ? "WEBGPU LIVE"
-            : gpuStatus === "checking"
-              ? "LINKING GPU"
-              : "FALLBACK MODE"}
-        </span>
-        {/*  */}
         <a
           className={styles.talk}
           href="https://www.linkedin.com/in/wonglok831/"
