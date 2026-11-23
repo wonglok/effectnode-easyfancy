@@ -74,6 +74,7 @@ const TRANSITION_GLYPH: Record<string, string> = {
   "page-curl": "◜",
   "ball-roll": "◍",
   "photo-drop": "❏",
+  "light-rays": "☀",
 };
 
 function transitionGlyph(kind?: string): string {
