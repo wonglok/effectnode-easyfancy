@@ -42,7 +42,13 @@ src/
 ├── store/useScrollerStore.ts       → zustand store + virtual scroll engine
 ├── lib/
 │   ├── scroll-phases.ts            → enter / animate / exit math
-│   └── render-pipeline.ts          → SectionRenderPipeline + every transition shader
+│   ├── render-pipeline.ts          → SectionRenderPipeline (selection + composite)
+│   └── transitions/                → one folder per handoff shader
+│       ├── mapping.ts              → id / label / pair table (scanner reads this)
+│       ├── index.ts                → TRANSITIONS registry + selectTransition
+│       ├── types.ts / shared.ts    → TransitionContext, finish pass, hash
+│       ├── ball-roll/ photo-drop/ ascii/ light-rays/
+│       └── liquid/ directional-scale/ melt/ cross-zoom/ page-curl/ hex-grid/
 └── sections/
     ├── types.ts                    → SectionMeta, CameraConfig, SectionWorld, Section3DProps
     ├── registry.ts                 → SECTIONS (ordered, SSR-safe metas)
@@ -349,7 +355,7 @@ A transition is **not** DOM, CSS or a separate scene. It is a shader in the sing
 There are two levels:
 
 1. **Scroll math** decides _how much_ blend (0..1), in `scroll-phases.ts` + the store.
-2. **Shader selection** decides _what the blend looks like_, in `render-pipeline.ts`.
+2. **Shader selection** decides _what the blend looks like_, in `src/lib/transitions/`.
 
 ### 3.2 Scroll math → `PipelineState`
 
@@ -412,6 +418,7 @@ class SectionRenderPipeline {
 ```
 
 - **One output node at a time.** `buildOutput(from, to, isTransitioning)` rebuilds `pipeline.outputNode` only when the key changes, so the graph references just the active `pass` (plain frame) or two passes (transition). Unused chapters are never drawn.
+- `transitionNode()` calls `selectTransition(fromIndex, toIndex)` from `./transitions` and hands the chosen builder a `TransitionContext` (`from`, `to`, `progress`, `accent`, `time`, `finish`). The pipeline no longer contains shader code.
 - `update()` eases the raw progress with `easeInOut` (smoothstep), writes it to `uniforms.progress`, advances `uniforms.time`, and lerps `uniforms.accent` between the two chapters' accents (using `progress`, or `1` when settled).
 - `pipeline.outputColorTransform = true` applies the renderer's tone mapping / sRGB output to the composite.
 - `render()` calls `pipeline.render()`.
@@ -420,24 +427,33 @@ class SectionRenderPipeline {
   - then the plain composite `buildOutput(0, 0, false)`.
     This removes first-scroll hitches for the pairs that exist today.
 
-### 3.5 Choosing a shader — `transitionNode()`
+### 3.5 Choosing a shader — `src/lib/transitions/`
+
+Selection is split into two files:
+
+- **`mapping.ts`** — pure metadata: `{ id, label, pairs }` per shader, in
+  priority order, plus `DEFAULT_TRANSITION_ID = "liquid"`. It imports no
+  Three.js, so easy-fancy's scanner can load it directly (§3.10).
+- **`index.ts`** — pairs each id with its folder's builder, exports
+  `TRANSITIONS`, and `selectTransition(from, to)`: the first entry whose
+  `pairs` contains the handoff in either direction, else the default.
 
 ```ts
-const isBallRollPair        = (from === 0 && to === 1) || (from === 1 && to === 0);
-const isPhotoDropPair       = (from === 1 && to === 2) || (from === 2 && to === 1);
-const isAsciiPair           = (from === 2 && to === 3) || (from === 3 && to === 2);
-const isPageCurlPair        = (from === 6 && to === 7) || (from === 7 && to === 6);
-const isCrossZoomPair       = (from === 3 && to === 4) || (from === 4 && to === 3);
-const isDirectionalScalePair= (from === 4 && to === 5) || (from === 5 && to === 4);
-
-if (isBallRollPair)         return ballRollTransitionNode(...);
-if (isPhotoDropPair)        return photoDropTransitionNode(...);
-if (isAsciiPair)            return asciiTransitionNode(...);
-if (isPageCurlPair)         return pageCurlTransitionNode(...);
-if (isCrossZoomPair)        return crossZoomTransitionNode(...);
-if (isDirectionalScalePair) return directionalScaleTransitionNode(...);
-return liquidTransitionNode(...);   // default
+export const TRANSITION_MAPPING = [
+  { id: "ball-roll",         label: "ball roll",         pairs: [[0, 1], [1, 0]] },
+  { id: "photo-drop",        label: "photo drop",        pairs: [[1, 2], [2, 1]] },
+  { id: "ascii",             label: "ascii",             pairs: [[2, 3], [3, 2]] },
+  { id: "page-curl",         label: "page curl",         pairs: [[6, 7], [7, 6]] },
+  { id: "cross-zoom",        label: "cross zoom",        pairs: [[3, 4], [4, 3]] },
+  { id: "directional-scale", label: "directional scale", pairs: [[4, 5], [5, 4]] },
+  { id: "melt",       label: "melt",       pairs: [] },
+  { id: "hex-grid",   label: "hex grid",   pairs: [] },
+  { id: "light-rays", label: "light rays", pairs: [] },
+  { id: "liquid",     label: "liquid",     pairs: [] },  // default
+];
 ```
+
+The pipeline calls `selectTransition(...)`, never an index predicate.
 
 Current registry is indices **0..3**, so every live handoff is:
 
@@ -455,36 +471,49 @@ Reserved mappings:
 | 4 ↔ 5 | directional scale | no indices 4/5 registered                                      |
 | 6 ↔ 7 | page curl         | `vr-gallery` (6) and `signal` (7) exist but are not registered |
 
-Three more shaders are implemented but **not selected by `transitionNode`**:
+Three more shaders are implemented but **not selected by `selectTransition`**:
 
-- `meltTransitionNode` (column melt)
-- `hexGridTransitionNode` (honeycomb reveal)
-- `lightRaysTransitionNode` (radial light shafts; kept from the earlier transition-3 pass)
+- `melt/` (column melt)
+- `hex-grid/` (honeycomb reveal)
+- `light-rays/` (radial light shafts; kept from the earlier transition-3 pass)
 
-They are available for future pairs; add a predicate to use them (and see §3.10 for the easy-fancy scanner's naming contract).
+They are available for future pairs; add a `pairs` entry in `mapping.ts` to
+select one (see §3.10 for the easy-fancy scanner contract).
 
 ### 3.6 The transition shaders
 
-All shaders are built in TSL, return `finishNode(vec4(rgb, 1))`, and read three uniforms: `progress` (already eased), `accent`, `time`.
+Each transition is a folder:
 
-| Method                               | Look                                                                                                                                   | Key constants / mechanics                                                                                                                                                                                 |
+```
+src/lib/transitions/<id>/
+├── index.ts    export { buildXxx } from "./shader"
+└── shader.ts   buildXxx({ from, to, progress, accent, time, finish }): Node<"vec4">
+```
+
+Every builder receives one `TransitionContext` — the two render targets, the
+eased `progress`, the lerped `accent`, `time`, and the shared `finish` pass —
+and returns a `Node<"vec4">`. The pipeline contains no shader math.
+
+| Folder                               | Look                                                                                                                                   | Key constants / mechanics                                                                                                                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ballRollTransitionNode`             | outgoing frame wraps onto a shaded sphere that shrinks and rolls away, revealing the incoming frame under a soft shadow               | `SIZE = 0.3`, `SHADING = 0.6`, `SHADOW = 0.5`, `direction = (1, 0)`, `AA = 0.0015`; radius `r0 / w` shrinking to half; roll angle integrated as `-2·full·log(1-0.5·away)/wrapped`; surface UVs re-projected with `atan(lq, q.z)·paper`                     |
-| `photoDropTransitionNode`            | a camera flash freezes the outgoing frame into a bordered print that shrinks, tilts and falls out, revealing the incoming frame       | `TILT = 0.35`, `BORDER = 0.04`, `FLASH = 0.85`, `SHADOW = 0.45`, `SHRINK = 0.24`, `RADIUS = 0.008`; rounded-box SDF `dCard`/`dImage`; gravity `fall = t²`; rotation by `-angle`; white bloom `1-(1-c)·(1-f)` fading over progress 0.05 → 0.3                         |
-| `asciiTransitionNode`                | the frame turns into text-mode characters, denser where it is brighter; cells scramble into those of the incoming image, then resolve back into it | `CELL_SIZE = 0.012` (0.3× the reference's 0.04 — a ~3× denser grid), `ASPECT = 0.6`, `STROKE = 0.05`, `COLORED = true`, ink `(0.3, 1.0, 0.45)`, black background; glyph edge AA is `max(0.02, 0.75px in cell units)` so the small characters stay smooth instead of shimmering; `density = floor(pow(luma·a, 0.75) · 9.99)`; 10 glyph SDFs (space `.` `:` `-` `=` `+` `*` `#` `%` `@`) picked branchlessly; 4-sample cell colour; per-cell switch `0.4 + 0.2·r`; scramble frames `floor(p·40)`; show in 0.05→0.35, out 0.65→0.95 |
-| `lightRaysTransitionNode`            | shafts of light burst from the outgoing highlights and stream out of a drifting centre; at the peak the incoming frame takes over and its rays shrink back into its highlights | `TAPS = 20`, `SHAFTS = 23`, `CENTER = (0.5, 0.6)`, `DRIFT = 0.15`, `REACH = 0.6`, `THRESHOLD = 0.65`, `INTENSITY = 1.5`, `TINT = (1.0, 0.82, 0.55)`; `hash12` + wrapping `shaftNoise`; `mirror()` keeps ray taps in frame; luminance-threshold `glow()`; 20-tap radial gather, screened over the frame; `amount` ramps 0→1→0 across progress with frame switch at `smoothstep(0.46, 0.54)` |
-| `liquidTransitionNode` **(default)** | noisy upward glass wipe: refraction wobble, chromatic split, thin accent light leak at the seam                                        | `TRANSITION_WIDTH = 0.24`; `mx_fractal_noise_float_2d` (3 octaves); wipe front = `progress * 2.1 - 0.55`; samples R/G/B with ±chroma offsets                                                              |
-| `directionalScaleTransitionNode`     | outgoing frame slides in `direction` while the incoming frame enters from the opposite edge; both shrink about mid-blend, black gutter | `SCALE = 0.7`, `direction = (0, 1)`, ease `sin(p·π/2)^3`, `fract` wrap, `parabola = sin(p·π)` shrink, `border` mask                                                                                       |
-| `meltTransitionNode`                 | Doom-style melt: outgoing frame runs downward in independently-shaped columns, incoming revealed from the top                          | `BARS = 30`, `AMPLITUDE = 2`, `NOISE = 0.1`, `FREQUENCY = 0.5`, `DRIP_SCALE = 0.5`; per-column hash + low-frequency wave + edge-drip                                                                      |
-| `crossZoomTransitionNode`            | both frames dissolved through a strong zoom blur whose centre drifts and strength rises then falls                                     | `STRENGTH = 0.4`, `SAMPLES = 40` → 41 taps **unrolled at graph-build time**; centre `0.25 → 0.75`; exponential ease-in-out; mirrored-sinusoid blur                                                        |
-| `pageCurlTransitionNode`             | outgoing frame is a paper sheet on a cylinder, rolling off and casting a shadow on the incoming scene                                  | `MIN_AMOUNT = -0.16`, `MAX_AMOUNT = 1.5`, `CYLINDER_RADIUS = 1/(2π)`, `SCALE = 512`, `SHARPNESS = 3`, `ANGLE = 100°`; rotate/rotateBack matrices; backside, see-through, inner shadow, anti-aliased edges |
-| `hexGridTransitionNode`              | screen split into hexagons, each flipping on its own staggered slice, borders glinting                                                 | `CELLS = 24`, lattice `(1, √3)`, per-cell hash start, glint `sin(local·π)·edge·0.4`                                                                                                                       |
+| `ball-roll/`             | outgoing frame wraps onto a shaded sphere that shrinks and rolls away, revealing the incoming frame under a soft shadow               | `SIZE = 0.3`, `SHADING = 0.6`, `SHADOW = 0.5`, `direction = (1, 0)`, `AA = 0.0015`; radius `r0 / w` shrinking to half; roll angle integrated as `-2·full·log(1-0.5·away)/wrapped`; surface UVs re-projected with `atan(lq, q.z)·paper`                     |
+| `photo-drop/`            | a camera flash freezes the outgoing frame into a bordered print that shrinks, tilts and falls out, revealing the incoming frame       | `TILT = 0.35`, `BORDER = 0.04`, `FLASH = 0.85`, `SHADOW = 0.45`, `SHRINK = 0.24`, `RADIUS = 0.008`; rounded-box SDF `dCard`/`dImage`; gravity `fall = t²`; rotation by `-angle`; white bloom `1-(1-c)·(1-f)` fading over progress 0.05 → 0.3                         |
+| `ascii/`                | the frame turns into text-mode characters, denser where it is brighter; cells scramble into those of the incoming image, then resolve back into it | `CELL_SIZE = 0.012` (0.3× the reference's 0.04 — a ~3× denser grid), `ASPECT = 0.6`, `STROKE = 0.05`, `COLORED = true`, ink `(0.3, 1.0, 0.45)`, black background; glyph edge AA is `max(0.02, 0.75px in cell units)` so the small characters stay smooth instead of shimmering; `density = floor(pow(luma·a, 0.75) · 9.99)`; 10 glyph SDFs (space `.` `:` `-` `=` `+` `*` `#` `%` `@`) picked branchlessly; 4-sample cell colour; per-cell switch `0.4 + 0.2·r`; scramble frames `floor(p·40)`; show in 0.05→0.35, out 0.65→0.95 |
+| `light-rays/`            | shafts of light burst from the outgoing highlights and stream out of a drifting centre; at the peak the incoming frame takes over and its rays shrink back into its highlights | `TAPS = 20`, `SHAFTS = 23`, `CENTER = (0.5, 0.6)`, `DRIFT = 0.15`, `REACH = 0.6`, `THRESHOLD = 0.65`, `INTENSITY = 1.5`, `TINT = (1.0, 0.82, 0.55)`; `hash12` + wrapping `shaftNoise`; `mirror()` keeps ray taps in frame; luminance-threshold `glow()`; 20-tap radial gather, screened over the frame; `amount` ramps 0→1→0 across progress with frame switch at `smoothstep(0.46, 0.54)` |
+| `liquid/` **(default)** | noisy upward glass wipe: refraction wobble, chromatic split, thin accent light leak at the seam                                        | `TRANSITION_WIDTH = 0.24`; `mx_fractal_noise_float_2d` (3 octaves); wipe front = `progress * 2.1 - 0.55`; samples R/G/B with ±chroma offsets                                                              |
+| `directional-scale/`     | outgoing frame slides in `direction` while the incoming frame enters from the opposite edge; both shrink about mid-blend, black gutter | `SCALE = 0.7`, `direction = (0, 1)`, ease `sin(p·π/2)^3`, `fract` wrap, `parabola = sin(p·π)` shrink, `border` mask                                                                                       |
+| `melt/`                 | Doom-style melt: outgoing frame runs downward in independently-shaped columns, incoming revealed from the top                          | `BARS = 30`, `AMPLITUDE = 2`, `NOISE = 0.1`, `FREQUENCY = 0.5`, `DRIP_SCALE = 0.5`; per-column hash + low-frequency wave + edge-drip                                                                      |
+| `cross-zoom/`            | both frames dissolved through a strong zoom blur whose centre drifts and strength rises then falls                                     | `STRENGTH = 0.4`, `SAMPLES = 40` → 41 taps **unrolled at graph-build time**; centre `0.25 → 0.75`; exponential ease-in-out; mirrored-sinusoid blur                                                        |
+| `page-curl/`             | outgoing frame is a paper sheet on a cylinder, rolling off and casting a shadow on the incoming scene                                  | `MIN_AMOUNT = -0.16`, `MAX_AMOUNT = 1.5`, `CYLINDER_RADIUS = 1/(2π)`, `SCALE = 512`, `SHARPNESS = 3`, `ANGLE = 100°`; rotate/rotateBack matrices; backside, see-through, inner shadow, anti-aliased edges |
+| `hex-grid/`              | screen split into hexagons, each flipping on its own staggered slice, borders glinting                                                 | `CELLS = 24`, lattice `(1, √3)`, per-cell hash start, glint `sin(local·π)·edge·0.4`                                                                                                                       |
 
-Opt-in parameters are module-local `const`s inside each method — retune by editing the constant, not by passing options.
+Tunables are module-local `const`s at the top of each `shader.ts` — edit the
+constant rather than adding options.
 
-### 3.7 Shared finishing pass — `finishNode()`
+### 3.7 Shared finishing pass — `src/lib/transitions/shared.ts`
 
-Every output path (plain frame and every transition) goes through:
+Every output path (plain frame and every transition) goes through
+`finishNode(input, time)`:
 
 ```ts
 vignette = 1 - smoothstep(0.32, 0.86, length(uv - 0.5)) * 0.18 + 0.82;
@@ -501,7 +530,7 @@ That is why the composite looks consistent across shaders. Do not add a second v
 - **Ported reference shaders** (directional scale, melt, cross zoom, page curl, ball roll, photo drop) were written in **bottom-left UV** space. They define:
   ```ts
   const uv = vec2(screenUV.x, oneMinus(screenUV.y));
-  const sampleFrom = (q) => fromTexture.sample(vec2(q.x, oneMinus(q.y))).rgb;
+  const sampleFrom = (q) => from.sample(vec2(q.x, oneMinus(q.y))).rgb;
   ```
   i.e. flip into reference space for the math, flip back when sampling. Keep this pattern or the handoff renders upside down.
 - Sampling a transition texture returns `.rgb`; alpha is discarded and the result is forced to `vec4(rgb, 1)`.
@@ -509,11 +538,16 @@ That is why the composite looks consistent across shaders. Do not add a second v
 
 ### 3.9 Adding or retuning a transition
 
-1. Add a `private xxxTransitionNode(from, to)` method returning `this.finishNode(vec4(rgb, 1))`.
-2. Add a pair predicate and branch in `transitionNode()`.
-3. Keep the numeric pair literals in the exact form `fromIndex === A && toIndex === B` inside a named `isXxxPair` variable — easy-fancy's scanner parses that regex to label the timeline.
-4. `prewarm()` needs no change for **consecutive** pairs: it walks `transitionNode(index, index + 1)` for every registered world.
-5. If the pair is non-consecutive or the mapping is special, the first play compiles on demand; consider extending `prewarm()` too.
+1. Create `src/lib/transitions/<id>/shader.ts` exporting
+   `buildXxx(context: TransitionContext)`; return `finish(vec4(rgb, 1))`.
+2. Create `src/lib/transitions/<id>/index.ts` re-exporting the builder.
+3. Add `{ id, label, pairs }` to `src/lib/transitions/mapping.ts`. List both
+   directions, e.g. `[[2, 3], [3, 2]]`. Keep the file free of Three.js imports.
+4. Add the builder to `BUILDERS` in `src/lib/transitions/index.ts`.
+5. `prewarm()` needs no change for **consecutive** pairs: it walks
+   `selectTransition(index, index + 1)` for every registered world.
+6. If the pair is non-consecutive (a reserved mapping), the first play compiles
+   on demand; consider extending `prewarm()` too.
 
 ### 3.10 easy-fancy integration
 
@@ -522,23 +556,26 @@ That is why the composite looks consistent across shaders. Do not add a second v
 - `{ source: "easy-fancy", type: "scroll-to-scene", index }` → `goTo(index)` (chapter anchor).
 - `{ source: "easy-fancy", type: "play-transition", from }` → `previewTransition(from)`, which scrubs `from`'s hold edge to the next anchor over 2.2 s.
 
-The skill's server (`server/scan-scenes.ts`) imports `SECTIONS` to list chapters and **reads `render-pipeline.ts` as text** to name transitions:
+The skill's server (`server/scan-scenes.ts`) imports `SECTIONS` to list chapters
+and imports the pure `src/lib/transitions/mapping.ts` to name transitions:
 
 ```ts
-const pageCurlPairs = extractPairs(source, "isPageCurlPair");
-const ballRollPairs = extractPairs(source, "isBallRollPair");
-const photoDropPairs = extractPairs(source, "isPhotoDropPair");
-const asciiPairs = extractPairs(source, "isAsciiPair");
-const meltPairs = extractPairs(source, "isMeltPair");
-// pair regex: /fromIndex\s*===\s*(\d+)\s*&&\s*toIndex\s*===\s*(\d+)/g
-// label: page curl > ball roll > photo drop > ascii > melt > liquid
+const mod = await import(pathToFileURL(mappingFile).href);
+const mapping = normalizeMapping(mod.TRANSITION_MAPPING);
+const fallbackId = mod.DEFAULT_TRANSITION_ID ?? "liquid";
+// first entry whose pairs match (both directions), else fallbackId
 ```
 
 So:
 
-- The file must keep variables literally named `isPageCurlPair` / `isBallRollPair` / `isPhotoDropPair` / `isAsciiPair` / `isMeltPair` for those labels to appear. The scanner emits `kind: "ascii"`, `label: "ascii"`; `Timeline.tsx` maps that kind to the `▤` glyph and `styles.css` tints it terminal green.
-- Every other pair is labelled **liquid** in the timeline, even if its shader is cross zoom / directional scale / hex grid.
-- Renaming or restructuring the predicates silently downgrades the timeline labels, not the site.
+- `mapping.ts` is the single source of truth for ids, labels and pairs. Ordering
+  is selection priority.
+- Keep it free of Three.js/DOM imports so the scanner's child process can load
+  it by file path.
+- Every id maps to a `Timeline.tsx` glyph and a `styles.css` tint; unknown ids
+  fall back to `⋈`.
+- The scanner still has a legacy fallback that regex-scans `render-pipeline.ts`
+  for `isXxxPair` predicates, for projects that keep transitions inline.
 
 ---
 
@@ -553,7 +590,7 @@ Critical path (do in order):
 5. **Register in `registry.ts`** — append the meta so `SECTIONS` stays index-ordered.
 6. **Register in `scene-registry.tsx`** — append the component in the same position.
 7. **Verify index contiguity** (`0..N-1`, `meta.index === array slot`), or the pipeline never builds and the splash stalls. Watch the console for `[SceneDirector] Scene indices are not contiguous`.
-8. **Decide the handoffs.** Every new pair defaults to liquid. Add a predicate in `transitionNode()` if it needs a specific shader; `prewarm()` then compiles it during boot.
+8. **Decide the handoffs.** Every new pair defaults to liquid. Add a `{ id, label, pairs }` entry in `src/lib/transitions/mapping.ts` if it needs a specific shader; `prewarm()` then compiles it during boot.
 9. **Update scroll bounds implicitly** — they derive from `SECTION_COUNT` and `getChapterAnchor`, so no manual constant changes are needed.
 
 Non-critical (can run in parallel afterward):
@@ -574,7 +611,7 @@ Non-critical (can run in parallel afterward):
 - **Do not add a vignette or grain in a scene or transition.** `finishNode` already applies both.
 - **Transition progress arrives pre-eased.** Applying `easeInOut` again makes handoffs feel sluggish.
 - **Flip UVs for ported shaders.** See §3.8.
-- **`transitionNode` indices are literal.** If chapters are reordered, the predicates pick the wrong shader (or silently fall back to liquid).
+- **`mapping.ts` pairs are literal.** If chapters are reordered, they pick the wrong shader (or silently fall back to liquid).
 - **`prewarm` only walks consecutive pairs.** Special non-adjacent mappings compile on first use.
 - **Dispose the world.** A scene that leaks its render targets will slow every subsequent chapter.
 - **Only `WebGPURenderer`.** If a browser lacks WebGPU, `SceneStage` shows the CSS fallback instead of the canvas; the experience is intentionally degraded, not emulated with WebGL.
@@ -584,12 +621,16 @@ Non-critical (can run in parallel afterward):
 
 ## 6. Quick reference
 
-| Concern                                         | File                                      |
-| ----------------------------------------------- | ----------------------------------------- |
-| One canvas + WebGPU bootstrap                   | `src/components/SceneStage.tsx`           |
-| Register worlds / precompile / render loop      | `src/components/SceneDirector.tsx`        |
-| Single render pipeline + all transition shaders | `src/lib/render-pipeline.ts`              |
-| enter / animate / exit math                     | `src/lib/scroll-phases.ts`                |
+| Concern                                         | File                                         |
+| ----------------------------------------------- | -------------------------------------------- |
+| One canvas + WebGPU bootstrap                   | `src/components/SceneStage.tsx`              |
+| Register worlds / precompile / render loop      | `src/components/SceneDirector.tsx`           |
+| Single render pipeline (composite + selection)  | `src/lib/render-pipeline.ts`                 |
+| Transition registry + `selectTransition`        | `src/lib/transitions/index.ts`               |
+| Transition id / label / pair table              | `src/lib/transitions/mapping.ts`             |
+| One transition shader per folder                | `src/lib/transitions/<id>/shader.ts`         |
+| Shared finish pass + hash                       | `src/lib/transitions/shared.ts`              |
+| enter / animate / exit math                     | `src/lib/scroll-phases.ts`                   |
 | zustand store + virtual scroll engine           | `src/store/useScrollerStore.ts`           |
 | Contracts                                       | `src/sections/types.ts`                   |
 | Chapter order (metas)                           | `src/sections/registry.ts`                |

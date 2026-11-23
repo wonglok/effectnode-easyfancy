@@ -56,12 +56,10 @@ function extractPairs(source: string, name: string): Array<[number, number]> {
 }
 
 /**
- * The pipeline picks a shader per adjacent pair: ball roll for the first pair,
- * photo drop for the second, text mode for the third, page curl for the last,
- * and the liquid wipe otherwise. Mirror that mapping so the timeline uses the
- * same names as the site.
+ * Legacy fallback for projects that keep their transitions inline: scans the
+ * pipeline text for named pair predicates.
  */
-function readTransitions(scenes: SceneInfo[]): {
+function readTransitionsFromPipeline(scenes: SceneInfo[]): {
   transitions: TransitionInfo[];
   transitionSource: string | null;
 } {
@@ -118,6 +116,89 @@ function readTransitions(scenes: SceneInfo[]): {
   };
 }
 
+type MappingEntry = {
+  id: string;
+  label: string;
+  pairs: Array<[number, number]>;
+};
+
+type MappingModule = {
+  TRANSITION_MAPPING?: unknown;
+  DEFAULT_TRANSITION_ID?: unknown;
+};
+
+/**
+ * Reads the site's transition folders. `src/lib/transitions/mapping.ts` is a
+ * pure metadata module (no Three.js imports), so it can be imported directly
+ * in this child process; that keeps the timeline labels in lockstep with the
+ * shader selection instead of regex-matching the pipeline source.
+ */
+async function readTransitions(scenes: SceneInfo[]): Promise<{
+  transitions: TransitionInfo[];
+  transitionSource: string | null;
+}> {
+  const mappingFile = ["mapping.ts", "mapping.js"]
+    .map((name) => path.join(cwd, "src", "lib", "transitions", name))
+    .find((file) => fs.existsSync(file));
+
+  if (mappingFile) {
+    try {
+      const mod = (await import(pathToFileURL(mappingFile).href)) as MappingModule;
+      const mapping = normalizeMapping(mod.TRANSITION_MAPPING);
+      if (mapping.length > 0) {
+        const fallbackId =
+          typeof mod.DEFAULT_TRANSITION_ID === "string"
+            ? mod.DEFAULT_TRANSITION_ID
+            : "liquid";
+        const transitions: TransitionInfo[] = [];
+        for (let index = 0; index < scenes.length - 1; index += 1) {
+          const from = scenes[index].index;
+          const to = scenes[index + 1].index;
+          const match =
+            mapping.find(({ pairs }) =>
+              pairs.some(
+                ([a, b]) => (a === from && b === to) || (a === to && b === from),
+              ),
+            ) ?? mapping.find(({ id }) => id === fallbackId);
+          transitions.push({
+            from,
+            to,
+            kind: match?.id ?? fallbackId,
+            label: match?.label ?? fallbackId,
+          });
+        }
+        return {
+          transitions,
+          transitionSource: path.relative(cwd, mappingFile),
+        };
+      }
+    } catch {
+      // Fall through to the legacy text scan below.
+    }
+  }
+
+  return readTransitionsFromPipeline(scenes);
+}
+
+function normalizeMapping(value: unknown): MappingEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const record = entry as Record<string, unknown>;
+    const id = String(record.id ?? "");
+    if (!id) return [];
+    const label = String(record.label ?? id);
+    const pairs = Array.isArray(record.pairs)
+      ? record.pairs.flatMap((pair) =>
+          Array.isArray(pair) && pair.length === 2
+            ? [[Number(pair[0]), Number(pair[1])] as [number, number]]
+            : [],
+        )
+      : [];
+    return [{ id, label, pairs }];
+  });
+}
+
 async function main(): Promise<ScenePayload> {
   if (!registry) {
     return {
@@ -150,7 +231,7 @@ async function main(): Promise<ScenePayload> {
       .filter((scene) => scene.id && scene.name)
       .sort((a, b) => a.index - b.index);
 
-    const { transitions, transitionSource } = readTransitions(scenes);
+    const { transitions, transitionSource } = await readTransitions(scenes);
 
     return {
       scenes,

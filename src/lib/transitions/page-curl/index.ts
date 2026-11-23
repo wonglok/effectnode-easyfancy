@@ -1,0 +1,1 @@
+export { buildPageCurl } from "./shader";

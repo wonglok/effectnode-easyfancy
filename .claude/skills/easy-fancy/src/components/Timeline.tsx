@@ -75,6 +75,10 @@ const TRANSITION_GLYPH: Record<string, string> = {
   "ball-roll": "◍",
   "photo-drop": "❏",
   ascii: "▤",
+  "light-rays": "☀",
+  "cross-zoom": "⊚",
+  "directional-scale": "⇱",
+  "hex-grid": "⬡",
 };
 
 function transitionGlyph(kind?: string): string {
