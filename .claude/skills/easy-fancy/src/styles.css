@@ -1717,8 +1717,8 @@ button.transition:focus-visible {
   color: #a17a45;
 }
 
-.transition[data-kind="light-rays"] .transitionGlyph {
-  color: #c08a2e;
+.transition[data-kind="ascii"] .transitionGlyph {
+  color: #4b9e63;
 }
 
 .transition[data-kind="liquid"] .transitionLabel {
@@ -1741,8 +1741,8 @@ button.transition:focus-visible {
   color: rgba(161, 122, 69, 0.9);
 }
 
-.transition[data-kind="light-rays"] .transitionLabel {
-  color: rgba(192, 138, 46, 0.9);
+.transition[data-kind="ascii"] .transitionLabel {
+  color: rgba(75, 158, 99, 0.9);
 }
 
 .transitionLabel {

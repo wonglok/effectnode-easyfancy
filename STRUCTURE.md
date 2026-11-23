@@ -425,14 +425,14 @@ class SectionRenderPipeline {
 ```ts
 const isBallRollPair        = (from === 0 && to === 1) || (from === 1 && to === 0);
 const isPhotoDropPair       = (from === 1 && to === 2) || (from === 2 && to === 1);
-const isLightRaysPair       = (from === 2 && to === 3) || (from === 3 && to === 2);
+const isAsciiPair           = (from === 2 && to === 3) || (from === 3 && to === 2);
 const isPageCurlPair        = (from === 6 && to === 7) || (from === 7 && to === 6);
 const isCrossZoomPair       = (from === 3 && to === 4) || (from === 4 && to === 3);
 const isDirectionalScalePair= (from === 4 && to === 5) || (from === 5 && to === 4);
 
 if (isBallRollPair)         return ballRollTransitionNode(...);
 if (isPhotoDropPair)        return photoDropTransitionNode(...);
-if (isLightRaysPair)        return lightRaysTransitionNode(...);
+if (isAsciiPair)            return asciiTransitionNode(...);
 if (isPageCurlPair)         return pageCurlTransitionNode(...);
 if (isCrossZoomPair)        return crossZoomTransitionNode(...);
 if (isDirectionalScalePair) return directionalScaleTransitionNode(...);
@@ -445,7 +445,7 @@ Current registry is indices **0..3**, so every live handoff is:
 | ------- | ---------------------- | ----------- |
 | 0 → 1   | Kinetic → Flow Shield  | ball roll   |
 | 1 → 2   | Flow Shield → Live Env | photo drop  |
-| 2 → 3   | Live Env → Alpha 6     | light rays  |
+| 2 → 3   | Live Env → Alpha 6     | ascii       |
 
 Reserved mappings:
 
@@ -455,10 +455,11 @@ Reserved mappings:
 | 4 ↔ 5 | directional scale | no indices 4/5 registered                                      |
 | 6 ↔ 7 | page curl         | `vr-gallery` (6) and `signal` (7) exist but are not registered |
 
-Two more shaders are implemented but **not selected by `transitionNode`**:
+Three more shaders are implemented but **not selected by `transitionNode`**:
 
 - `meltTransitionNode` (column melt)
 - `hexGridTransitionNode` (honeycomb reveal)
+- `lightRaysTransitionNode` (radial light shafts; kept from the earlier transition-3 pass)
 
 They are available for future pairs; add a predicate to use them (and see §3.10 for the easy-fancy scanner's naming contract).
 
@@ -470,6 +471,7 @@ All shaders are built in TSL, return `finishNode(vec4(rgb, 1))`, and read three 
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ballRollTransitionNode`             | outgoing frame wraps onto a shaded sphere that shrinks and rolls away, revealing the incoming frame under a soft shadow               | `SIZE = 0.3`, `SHADING = 0.6`, `SHADOW = 0.5`, `direction = (1, 0)`, `AA = 0.0015`; radius `r0 / w` shrinking to half; roll angle integrated as `-2·full·log(1-0.5·away)/wrapped`; surface UVs re-projected with `atan(lq, q.z)·paper`                     |
 | `photoDropTransitionNode`            | a camera flash freezes the outgoing frame into a bordered print that shrinks, tilts and falls out, revealing the incoming frame       | `TILT = 0.35`, `BORDER = 0.04`, `FLASH = 0.85`, `SHADOW = 0.45`, `SHRINK = 0.24`, `RADIUS = 0.008`; rounded-box SDF `dCard`/`dImage`; gravity `fall = t²`; rotation by `-angle`; white bloom `1-(1-c)·(1-f)` fading over progress 0.05 → 0.3                         |
+| `asciiTransitionNode`                | the frame turns into text-mode characters, denser where it is brighter; cells scramble into those of the incoming image, then resolve back into it | `CELL_SIZE = 0.04`, `ASPECT = 0.6`, `STROKE = 0.05`, `COLORED = true`, ink `(0.3, 1.0, 0.45)`, black background; `density = floor(pow(luma·a, 0.75) · 9.99)`; 10 glyph SDFs (space `.` `:` `-` `=` `+` `*` `#` `%` `@`) picked branchlessly; 4-sample cell colour; per-cell switch `0.4 + 0.2·r`; scramble frames `floor(p·40)`; show in 0.05→0.35, out 0.65→0.95 |
 | `lightRaysTransitionNode`            | shafts of light burst from the outgoing highlights and stream out of a drifting centre; at the peak the incoming frame takes over and its rays shrink back into its highlights | `TAPS = 20`, `SHAFTS = 23`, `CENTER = (0.5, 0.6)`, `DRIFT = 0.15`, `REACH = 0.6`, `THRESHOLD = 0.65`, `INTENSITY = 1.5`, `TINT = (1.0, 0.82, 0.55)`; `hash12` + wrapping `shaftNoise`; `mirror()` keeps ray taps in frame; luminance-threshold `glow()`; 20-tap radial gather, screened over the frame; `amount` ramps 0→1→0 across progress with frame switch at `smoothstep(0.46, 0.54)` |
 | `liquidTransitionNode` **(default)** | noisy upward glass wipe: refraction wobble, chromatic split, thin accent light leak at the seam                                        | `TRANSITION_WIDTH = 0.24`; `mx_fractal_noise_float_2d` (3 octaves); wipe front = `progress * 2.1 - 0.55`; samples R/G/B with ±chroma offsets                                                              |
 | `directionalScaleTransitionNode`     | outgoing frame slides in `direction` while the incoming frame enters from the opposite edge; both shrink about mid-blend, black gutter | `SCALE = 0.7`, `direction = (0, 1)`, ease `sin(p·π/2)^3`, `fract` wrap, `parabola = sin(p·π)` shrink, `border` mask                                                                                       |
@@ -526,15 +528,15 @@ The skill's server (`server/scan-scenes.ts`) imports `SECTIONS` to list chapters
 const pageCurlPairs = extractPairs(source, "isPageCurlPair");
 const ballRollPairs = extractPairs(source, "isBallRollPair");
 const photoDropPairs = extractPairs(source, "isPhotoDropPair");
-const lightRaysPairs = extractPairs(source, "isLightRaysPair");
+const asciiPairs = extractPairs(source, "isAsciiPair");
 const meltPairs = extractPairs(source, "isMeltPair");
 // pair regex: /fromIndex\s*===\s*(\d+)\s*&&\s*toIndex\s*===\s*(\d+)/g
-// label: page curl > ball roll > photo drop > light rays > melt > liquid
+// label: page curl > ball roll > photo drop > ascii > melt > liquid
 ```
 
 So:
 
-- The file must keep variables literally named `isPageCurlPair` / `isBallRollPair` / `isPhotoDropPair` / `isLightRaysPair` / `isMeltPair` for those labels to appear. The scanner emits `kind: "light-rays"`, `label: "light rays"`; `Timeline.tsx` maps that kind to the `☀` glyph and `styles.css` tints it warm gold.
+- The file must keep variables literally named `isPageCurlPair` / `isBallRollPair` / `isPhotoDropPair` / `isAsciiPair` / `isMeltPair` for those labels to appear. The scanner emits `kind: "ascii"`, `label: "ascii"`; `Timeline.tsx` maps that kind to the `▤` glyph and `styles.css` tints it terminal green.
 - Every other pair is labelled **liquid** in the timeline, even if its shader is cross zoom / directional scale / hex grid.
 - Renaming or restructuring the predicates silently downgrades the timeline labels, not the site.
 

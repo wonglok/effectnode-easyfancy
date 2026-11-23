@@ -1165,8 +1165,9 @@ export class SectionRenderPipeline {
    * Shafts of light, ported to TSL from gre's gl-transition (MIT). Light
    * bursts from the highlights of the outgoing frame and streams outward from
    * a slowly drifting centre as radial shafts; at their peak the incoming
-   * frame takes over and its own rays shrink back into its highlights. Used
-   * for the third handoff (Live Env -> Alpha 6, "transition 3").
+   * frame takes over and its own rays shrink back into its highlights. Kept as
+   * an available shader for future pairs; the third handoff now uses the
+   * text-mode dissolve instead.
    */
   private lightRaysTransitionNode(
     fromTexture: ReturnType<SectionWorld["pass"]["getTextureNode"]>,
