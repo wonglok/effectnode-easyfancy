@@ -5,13 +5,7 @@ import {
   MeshBasicNodeMaterial,
   PlaneGeometry,
 } from "three/webgpu";
-import {
-  color,
-  mix,
-  positionWorld,
-  smoothstep,
-  uniform,
-} from "three/tsl";
+import { color, mix, positionWorld, smoothstep, uniform } from "three/tsl";
 import { hexGrid } from "../grid";
 import { alpha6WarmTheme, blendThemeColor } from "../theme";
 import { CausticReceiverMaterial } from "./caustics";

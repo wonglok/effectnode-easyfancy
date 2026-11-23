@@ -964,8 +964,9 @@ export class SectionRenderPipeline {
     toTexture: ReturnType<SectionWorld["pass"]["getTextureNode"]>,
   ) {
     // Height of a character (frame heights), its width (in cell heights) and
-    // the half width of its strokes.
-    const CELL_SIZE = 0.04;
+    // the half width of its strokes. 0.012 is 0.3x the reference's 0.04, so
+    // the text grid is almost three times denser.
+    const CELL_SIZE = 0.012;
     const ASPECT = 0.6;
     const STROKE = 0.05;
     // Colored characters take the image's own tint; otherwise they use ink.
@@ -1107,6 +1108,13 @@ export class SectionRenderPipeline {
     const cell = floor(fp.div(dims));
     const center = cell.add(0.5).mul(dims);
     const q = fp.sub(center).div(CELL_SIZE);
+    // One pixel in cell units. With the finer grid the characters are only a
+    // few pixels tall, so the reference's fixed 0.02 cell-width edge would be
+    // sub-pixel and shimmer; widen it to about three quarters of a pixel.
+    const edge = max(
+      float(0.02),
+      float(0.75).div(screenSize.y).div(CELL_SIZE),
+    );
 
     // Each cell switches to the incoming image at its own time, scrambling
     // through random characters around it.
@@ -1130,7 +1138,9 @@ export class SectionRenderPipeline {
       cellDensity,
     );
 
-    const cover = oneMinus(smoothstep(-0.02, 0.02, glyph(g, q)));
+    const cover = oneMinus(
+      smoothstep(edge.mul(-1), edge, glyph(g, q)),
+    );
     const tint = COLORED
       ? mix(
           c.rgb,
