@@ -24,7 +24,8 @@ export type SceneInfo = {
 
 /**
  * The shader the site uses between two adjacent chapters, read from
- * `src/lib/render-pipeline.ts` (e.g. liquid, melt, page-curl, ball-roll).
+ * `src/lib/render-pipeline.ts` (e.g. liquid, melt, page-curl, ball-roll,
+ * photo-drop).
  */
 export type TransitionInfo = {
   from: number;

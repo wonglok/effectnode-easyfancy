@@ -1713,6 +1713,10 @@ button.transition:focus-visible {
   color: #7357b8;
 }
 
+.transition[data-kind="photo-drop"] .transitionGlyph {
+  color: #a17a45;
+}
+
 .transition[data-kind="liquid"] .transitionLabel {
   color: rgba(47, 123, 176, 0.9);
 }
@@ -1727,6 +1731,10 @@ button.transition:focus-visible {
 
 .transition[data-kind="ball-roll"] .transitionLabel {
   color: rgba(115, 87, 184, 0.9);
+}
+
+.transition[data-kind="photo-drop"] .transitionLabel {
+  color: rgba(161, 122, 69, 0.9);
 }
 
 .transitionLabel {
