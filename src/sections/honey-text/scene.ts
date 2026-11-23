@@ -23,6 +23,12 @@ import { alpha6Meta } from "./meta";
 
 const ORIGIN = new THREE.Vector3();
 
+// The glass title is sized against this fixed design frame instead of the live
+// viewport, so its on-screen size stays static as the window resizes. The
+// numbers preserve the shot as it was authored at 1440 x 900.
+const TITLE_DESIGN_WIDTH_PX = 1440 * 0.82;
+const TITLE_DESIGN_HEIGHT_PX = 900 * 0.55;
+
 type Stage = {
   size: THREE.Vector2;
   distance: number;
@@ -104,12 +110,19 @@ export async function createAlpha6World(
     const title = createGlassTitle(
       glass.material,
       settings,
-      (width, depth) =>
-        Math.min(
-          (nextSize.x * 0.82 * titlePixel) / width,
-          // Ground depth is foreshortened by about sin(pitch) on screen.
-          (nextSize.y * 0.55 * titlePixel) / (depth * 0.9),
-        ),
+      (width, depth) => {
+        // Static size from the design frame, converted to world units for
+        // this camera distance. Ground depth is foreshortened by about
+        // sin(pitch) on screen.
+        const staticFit = Math.min(
+          (TITLE_DESIGN_WIDTH_PX * titlePixel) / width,
+          (TITLE_DESIGN_HEIGHT_PX * titlePixel) / (depth * 0.9),
+        );
+        // Only give way when a window narrower than the design frame would
+        // clip the word; at and above that width the size is static.
+        const visibleFit = (nextSize.x * 0.92 * titlePixel) / width;
+        return Math.min(staticFit, visibleFit);
+      },
     );
 
     title.root.position.copy(titleAt);

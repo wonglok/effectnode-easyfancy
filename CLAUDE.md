@@ -19,3 +19,9 @@ if user provided any glsl code or webgl code or webgl 2.0 code or threeJS WebGLR
 # temp files
 
 must write temp files to: `.claude/temp`
+
+# scene code strcuture and transition code structure
+
+STRUCTURE.md includes the scene code strcuture and transition code structure.
+
+must read: "./STRUCTURE.md" before planning and update it everytime after work is fniished.
