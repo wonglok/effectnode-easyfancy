@@ -56,9 +56,10 @@ function extractPairs(source: string, name: string): Array<[number, number]> {
 }
 
 /**
- * The pipeline picks a shader per adjacent pair: page curl for the last pair,
- * column melt for 1 ↔ 2, and the liquid wipe otherwise. Mirror that mapping so
- * the timeline uses the same names as the site.
+ * The pipeline picks a shader per adjacent pair: ball roll for the first pair,
+ * page curl for the last pair, column melt for 1 ↔ 2, and the liquid wipe
+ * otherwise. Mirror that mapping so the timeline uses the same names as the
+ * site.
  */
 function readTransitions(scenes: SceneInfo[]): {
   transitions: TransitionInfo[];
@@ -78,8 +79,12 @@ function readTransitions(scenes: SceneInfo[]): {
   }
 
   const pageCurlPairs = extractPairs(source, "isPageCurlPair");
+  const ballRollPairs = extractPairs(source, "isBallRollPair");
   const meltPairs = extractPairs(source, "isMeltPair");
-  const understood = pageCurlPairs.length > 0 || meltPairs.length > 0;
+  const understood =
+    pageCurlPairs.length > 0 ||
+    ballRollPairs.length > 0 ||
+    meltPairs.length > 0;
   if (!understood) return { transitions: [], transitionSource: null };
 
   const matches = (pairs: Array<[number, number]>, a: number, b: number) =>
@@ -91,9 +96,11 @@ function readTransitions(scenes: SceneInfo[]): {
     const to = scenes[index + 1].index;
     const transition = matches(pageCurlPairs, from, to)
       ? { kind: "page-curl", label: "page curl" }
-      : matches(meltPairs, from, to)
-        ? { kind: "melt", label: "melt" }
-        : { kind: "liquid", label: "liquid" };
+      : matches(ballRollPairs, from, to)
+        ? { kind: "ball-roll", label: "ball roll" }
+        : matches(meltPairs, from, to)
+          ? { kind: "melt", label: "melt" }
+          : { kind: "liquid", label: "liquid" };
     transitions.push({ from, to, ...transition });
   }
 

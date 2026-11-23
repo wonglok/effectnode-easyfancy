@@ -423,10 +423,12 @@ class SectionRenderPipeline {
 ### 3.5 Choosing a shader — `transitionNode()`
 
 ```ts
+const isBallRollPair        = (from === 0 && to === 1) || (from === 1 && to === 0);
 const isPageCurlPair        = (from === 6 && to === 7) || (from === 7 && to === 6);
 const isCrossZoomPair       = (from === 3 && to === 4) || (from === 4 && to === 3);
 const isDirectionalScalePair= (from === 4 && to === 5) || (from === 5 && to === 4);
 
+if (isBallRollPair)         return ballRollTransitionNode(...);
 if (isPageCurlPair)         return pageCurlTransitionNode(...);
 if (isCrossZoomPair)        return crossZoomTransitionNode(...);
 if (isDirectionalScalePair) return directionalScaleTransitionNode(...);
@@ -435,11 +437,11 @@ return liquidTransitionNode(...);   // default
 
 Current registry is indices **0..3**, so every live handoff is:
 
-| Handoff | Chapters               | Shader |
-| ------- | ---------------------- | ------ |
-| 0 → 1   | Kinetic → Flow Shield  | liquid |
-| 1 → 2   | Flow Shield → Live Env | liquid |
-| 2 → 3   | Live Env → Alpha 6     | liquid |
+| Handoff | Chapters               | Shader    |
+| ------- | ---------------------- | --------- |
+| 0 → 1   | Kinetic → Flow Shield  | ball roll |
+| 1 → 2   | Flow Shield → Live Env | liquid    |
+| 2 → 3   | Live Env → Alpha 6     | liquid    |
 
 Reserved mappings:
 
@@ -462,6 +464,7 @@ All shaders are built in TSL, return `finishNode(vec4(rgb, 1))`, and read three 
 
 | Method                               | Look                                                                                                                                   | Key constants / mechanics                                                                                                                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ballRollTransitionNode`             | outgoing frame wraps onto a shaded sphere that shrinks and rolls away, revealing the incoming frame under a soft shadow               | `SIZE = 0.3`, `SHADING = 0.6`, `SHADOW = 0.5`, `direction = (1, 0)`, `AA = 0.0015`; radius `r0 / w` shrinking to half; roll angle integrated as `-2·full·log(1-0.5·away)/wrapped`; surface UVs re-projected with `atan(lq, q.z)·paper`                     |
 | `liquidTransitionNode` **(default)** | noisy upward glass wipe: refraction wobble, chromatic split, thin accent light leak at the seam                                        | `TRANSITION_WIDTH = 0.24`; `mx_fractal_noise_float_2d` (3 octaves); wipe front = `progress * 2.1 - 0.55`; samples R/G/B with ±chroma offsets                                                              |
 | `directionalScaleTransitionNode`     | outgoing frame slides in `direction` while the incoming frame enters from the opposite edge; both shrink about mid-blend, black gutter | `SCALE = 0.7`, `direction = (0, 1)`, ease `sin(p·π/2)^3`, `fract` wrap, `parabola = sin(p·π)` shrink, `border` mask                                                                                       |
 | `meltTransitionNode`                 | Doom-style melt: outgoing frame runs downward in independently-shaped columns, incoming revealed from the top                          | `BARS = 30`, `AMPLITUDE = 2`, `NOISE = 0.1`, `FREQUENCY = 0.5`, `DRIP_SCALE = 0.5`; per-column hash + low-frequency wave + edge-drip                                                                      |
@@ -487,7 +490,7 @@ That is why the composite looks consistent across shaders. Do not add a second v
 ### 3.8 Coordinate conventions (important when porting a shader)
 
 - **Plain composite and liquid/hex shaders** sample with `screenUV` directly (render-target origin is top-left).
-- **Ported reference shaders** (directional scale, melt, cross zoom, page curl) were written in **bottom-left UV** space. They define:
+- **Ported reference shaders** (directional scale, melt, cross zoom, page curl, ball roll) were written in **bottom-left UV** space. They define:
   ```ts
   const uv = vec2(screenUV.x, oneMinus(screenUV.y));
   const sampleFrom = (q) => fromTexture.sample(vec2(q.x, oneMinus(q.y))).rgb;
@@ -515,14 +518,15 @@ The skill's server (`server/scan-scenes.ts`) imports `SECTIONS` to list chapters
 
 ```ts
 const pageCurlPairs = extractPairs(source, "isPageCurlPair");
+const ballRollPairs = extractPairs(source, "isBallRollPair");
 const meltPairs = extractPairs(source, "isMeltPair");
 // pair regex: /fromIndex\s*===\s*(\d+)\s*&&\s*toIndex\s*===\s*(\d+)/g
-// label: page curl > melt > liquid
+// label: page curl > ball roll > melt > liquid
 ```
 
 So:
 
-- The file must keep variables literally named `isPageCurlPair` / `isMeltPair` for those labels to appear.
+- The file must keep variables literally named `isPageCurlPair` / `isBallRollPair` / `isMeltPair` for those labels to appear.
 - Every other pair is labelled **liquid** in the timeline, even if its shader is cross zoom / directional scale / hex grid.
 - Renaming or restructuring the predicates silently downgrades the timeline labels, not the site.
 

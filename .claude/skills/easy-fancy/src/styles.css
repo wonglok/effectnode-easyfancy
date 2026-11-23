@@ -1709,6 +1709,10 @@ button.transition:focus-visible {
   color: #a87a12;
 }
 
+.transition[data-kind="ball-roll"] .transitionGlyph {
+  color: #7357b8;
+}
+
 .transition[data-kind="liquid"] .transitionLabel {
   color: rgba(47, 123, 176, 0.9);
 }
@@ -1719,6 +1723,10 @@ button.transition:focus-visible {
 
 .transition[data-kind="page-curl"] .transitionLabel {
   color: rgba(168, 122, 18, 0.9);
+}
+
+.transition[data-kind="ball-roll"] .transitionLabel {
+  color: rgba(115, 87, 184, 0.9);
 }
 
 .transitionLabel {

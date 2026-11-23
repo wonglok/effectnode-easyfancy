@@ -72,6 +72,7 @@ const TRANSITION_GLYPH: Record<string, string> = {
   liquid: "≈",
   melt: "≋",
   "page-curl": "◜",
+  "ball-roll": "◍",
 };
 
 function transitionGlyph(kind?: string): string {
